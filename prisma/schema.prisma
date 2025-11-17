@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model inventories {
+  inventory_id    String            @id @db.Uuid
+  location_id     String?           @unique @db.Uuid
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  user_id         String            @db.Uuid
+  locations       locations?        @relation(fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+  users           users             @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  inventory_items inventory_items[]
+}
+
+model inventory_items {
+  inventory_id String      @db.Uuid
+  created_at   DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime    @default(now()) @db.Timestamptz(6)
+  name         String
+  location_id  String?     @db.Uuid
+  inventories  inventories @relation(fields: [inventory_id], references: [inventory_id], onDelete: NoAction, onUpdate: NoAction)
+  locations    locations?  @relation(fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([inventory_id, name])
+}
+
+model locations {
+  location_id     String            @id @db.Uuid
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  longitude       Decimal?          @db.Decimal
+  latitude        Decimal?          @db.Decimal
+  radius          Int
+  user_id         String            @db.Uuid
+  location_name   String
+  sub_location_id String?           @db.Uuid
+  inventories     inventories?
+  inventory_items inventory_items[]
+  locations       locations?        @relation("locationsTolocations", fields: [sub_location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+  other_locations locations[]       @relation("locationsTolocations")
+  users           users             @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  tasks           tasks[]
+}
+
+model priorities {
+  priority_level String  @id
+  tasks          tasks[]
+}
+
+model projects {
+  project_id          String   @id @db.Uuid
+  user_id             String   @db.Uuid
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @default(now()) @db.Timestamptz(6)
+  project_name        String
+  project_description String?
+  users               users    @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  tasks               tasks[]
+}
+
+model task_notes {
+  task_note_id      String   @id @db.Uuid
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+  task_note_content String
+  tasks             tasks?
+}
+
+model tasks {
+  task_id          String      @id @db.Uuid
+  created_at       DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime    @default(now()) @db.Timestamptz(6)
+  task_description String
+  project_id       String      @db.Uuid
+  priority_level   String?
+  location_id      String?     @db.Uuid
+  task_note_id     String?     @unique @db.Uuid
+  locations        locations?  @relation(fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
+  priorities       priorities? @relation(fields: [priority_level], references: [priority_level], onDelete: NoAction, onUpdate: NoAction)
+  projects         projects    @relation(fields: [project_id], references: [project_id], onDelete: NoAction, onUpdate: NoAction)
+  task_notes       task_notes? @relation(fields: [task_note_id], references: [task_note_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([location_id], map: "idx_tasks_location_id")
+}
+
+model users {
+  user_id     String        @id @db.Uuid
+  created_at  DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime      @default(now()) @db.Timestamptz(6)
+  username    String
+  email       String        @unique
+  inventories inventories[]
+  locations   locations[]
+  projects    projects[]
+}
