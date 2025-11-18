@@ -82,6 +82,7 @@ model tasks {
   priority_level   String?
   location_id      String?     @db.Uuid
   task_note_id     String?     @unique @db.Uuid
+  due_date         DateTime?   @db.Timestamptz(6)
   locations        locations?  @relation(fields: [location_id], references: [location_id], onDelete: NoAction, onUpdate: NoAction)
   priorities       priorities? @relation(fields: [priority_level], references: [priority_level], onDelete: NoAction, onUpdate: NoAction)
   projects         projects    @relation(fields: [project_id], references: [project_id], onDelete: NoAction, onUpdate: NoAction)

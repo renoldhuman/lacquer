@@ -110,6 +110,9 @@ CREATE TABLE tasks (
     location_id      uuid REFERENCES locations (location_id),
 
     -- One-to-one with TaskNote
-    task_note_id     uuid UNIQUE REFERENCES task_notes (task_note_id)
+    task_note_id     uuid UNIQUE REFERENCES task_notes (task_note_id),
+
+    -- Optional due date
+    due_date         timestamptz
 );
 

@@ -1,12 +1,19 @@
 'use client'
 
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api'
 
 export interface LocationData {
   address: string
   lat: number
   lng: number
+}
+
+interface LocationPin {
+  location_id: string
+  location_name: string
+  latitude: number
+  longitude: number
 }
 
 interface MapProps {
@@ -18,6 +25,7 @@ interface MapProps {
   height?: string
   onLocationSelect?: (location: LocationData) => void
   selectedLocation?: LocationData | null
+  locations?: LocationPin[]
 }
 
 const defaultCenter = {
@@ -32,13 +40,12 @@ export function Map({
   zoom = defaultZoom, 
   height = '400px',
   onLocationSelect,
-  selectedLocation
+  selectedLocation,
+  locations = []
 }: MapProps) {
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null)
   const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null)
   const [map, setMap] = useState<google.maps.Map | null>(null)
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const mapContainerStyle = useMemo(
     () => ({
@@ -55,35 +62,15 @@ export function Map({
     setGeocoder(new google.maps.Geocoder())
   }, [])
 
-  // Initialize autocomplete when map and input are ready
+  // Update map center when location is selected from form
   useEffect(() => {
-    if (map && searchInputRef.current && !autocomplete) {
-      const autocompleteInstance = new google.maps.places.Autocomplete(searchInputRef.current, {
-        types: ['address'],
-        fields: ['formatted_address', 'geometry'],
-      })
-
-      autocompleteInstance.addListener('place_changed', () => {
-        const place = autocompleteInstance.getPlace()
-        
-        if (!place.geometry || !place.geometry.location || !onLocationSelect) return
-
-        const lat = place.geometry.location.lat()
-        const lng = place.geometry.location.lng()
-        const position = { lat, lng }
-        const address = place.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-
-        setMarkerPosition(position)
-        onLocationSelect({ address, lat, lng })
-
-        // Center map on selected location
-        map.setCenter(position)
-        map.setZoom(15)
-      })
-
-      setAutocomplete(autocompleteInstance)
+    if (selectedLocation && map) {
+      const position = { lat: selectedLocation.lat, lng: selectedLocation.lng }
+      map.setCenter(position)
+      map.setZoom(15)
+      setMarkerPosition(position)
     }
-  }, [map, autocomplete, onLocationSelect])
+  }, [selectedLocation, map])
 
   const handleMapClick = useCallback((e: google.maps.MapMouseEvent) => {
     if (!e.latLng || !geocoder || !onLocationSelect) return
@@ -136,18 +123,7 @@ export function Map({
       googleMapsApiKey={apiKey}
       libraries={['places']}
     >
-      <div className="relative">
-        {/* Search Input */}
-        <div className="absolute top-4 left-4 z-10 w-1/3 max-w-xs">
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search for an address..."
-            className="w-full px-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-500 dark:placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:focus:ring-zinc-400 shadow-lg"
-          />
-        </div>
-
-        <GoogleMap
+      <GoogleMap
           mapContainerStyle={mapContainerStyle}
           center={currentMarkerPosition || center}
           zoom={zoom}
@@ -164,11 +140,48 @@ export function Map({
             panControl: false,
           }}
         >
-          {currentMarkerPosition && (
+          {/* Permanent location pins */}
+          {locations.map((location) => {
+            const isSelected = selectedLocation && 
+              Math.abs(location.latitude - selectedLocation.lat) < 0.0001 &&
+              Math.abs(location.longitude - selectedLocation.lng) < 0.0001
+            
+            // Use default marker for selected location, custom icon for others
+            if (isSelected) {
+              return (
+                <Marker
+                  key={location.location_id}
+                  position={{ lat: location.latitude, lng: location.longitude }}
+                  title={location.location_name}
+                />
+              )
+            }
+            
+            return (
+              <Marker
+                key={location.location_id}
+                position={{ lat: location.latitude, lng: location.longitude }}
+                title={location.location_name}
+                icon={{
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 6,
+                  fillColor: '#3b82f6',
+                  fillOpacity: 1,
+                  strokeColor: '#ffffff',
+                  strokeWeight: 2,
+                }}
+              />
+            )
+          })}
+          
+          {/* Selected location marker (if different from permanent pins) */}
+          {currentMarkerPosition && !locations.some(loc => 
+            Math.abs(loc.latitude - currentMarkerPosition.lat) < 0.0001 &&
+            Math.abs(loc.longitude - currentMarkerPosition.lng) < 0.0001
+          ) && (
             <Marker position={currentMarkerPosition} />
           )}
         </GoogleMap>
-      </div>
     </LoadScript>
   )
 }
