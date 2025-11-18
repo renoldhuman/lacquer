@@ -97,6 +97,56 @@ export async function getLocations() {
   }
 }
 
+export async function getUserAutoLocationFilter() {
+  try {
+    // Get the first user (default user pattern)
+    const user = await prisma.users.findFirst({
+      select: {
+        auto_location_filter: true,
+      },
+    })
+    
+    // Return true by default if no user exists
+    return user?.auto_location_filter ?? true
+  } catch (error) {
+    console.error('Error fetching user auto_location_filter:', error)
+    // Return true by default on error
+    return true
+  }
+}
+
+export async function updateUserAutoLocationFilter(enabled: boolean) {
+  try {
+    // Get the first user (default user pattern)
+    let user = await prisma.users.findFirst()
+    
+    if (!user) {
+      // Create default user if none exists
+      user = await prisma.users.create({
+        data: {
+          user_id: randomUUID(),
+          username: 'default',
+          email: 'default@example.com',
+          auto_location_filter: enabled,
+        },
+      })
+    } else {
+      // Update existing user
+      user = await prisma.users.update({
+        where: { user_id: user.user_id },
+        data: { auto_location_filter: enabled },
+      })
+    }
+    
+    revalidatePath('/settings')
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating user auto_location_filter:', error)
+    throw error
+  }
+}
+
 export async function createProject(projectName: string) {
   try {
     // Ensure a default user exists

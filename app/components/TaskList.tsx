@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TaskItem } from './TaskItem'
 
 interface Task {
@@ -32,17 +32,80 @@ interface Task {
 
 interface TaskListProps {
   tasks: Task[]
+  autoLocationFilter?: boolean
 }
 
-type FilterType = 'project' | 'location' | null
+type FilterType = 'project' | 'location' | 'proximity' | null
 type FilterValue = string | null
-type SortType = 'A-Z' | 'priority' | 'due-date'
+type SortType = 'A-Z' | 'priority' | 'due-date' | 'proximity'
 
-export function TaskList({ tasks }: TaskListProps) {
+interface UserLocation {
+  latitude: number
+  longitude: number
+}
+
+// Haversine formula to calculate distance between two coordinates in meters
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000 // Earth's radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+export function TaskList({ tasks, autoLocationFilter = true }: TaskListProps) {
   const [filterType, setFilterType] = useState<FilterType>(null)
   const [filterValue, setFilterValue] = useState<FilterValue>(null)
   const [showCompleted, setShowCompleted] = useState<boolean>(false)
   const [sortType, setSortType] = useState<SortType>('A-Z')
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+
+  // Request location permission and get user's location on page load
+  useEffect(() => {
+    // Only request location if auto_location_filter is enabled
+    if (!autoLocationFilter) {
+      return
+    }
+
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        })
+        // Automatically set proximity filter on successful location
+        setFilterType('proximity')
+        setFilterValue('active')
+        setLocationError(null)
+      },
+      (error) => {
+        setLocationError(`Location access denied: ${error.message}`)
+        console.error('Error getting location:', error)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    )
+  }, [autoLocationFilter])
 
   const handleProjectFilter = (projectId: string) => {
     if (filterType === 'project' && filterValue === projectId) {
@@ -87,6 +150,20 @@ export function TaskList({ tasks }: TaskListProps) {
       return task.location_id === filterValue
     }
     
+    if (filterType === 'proximity') {
+      // Filter tasks within 100m of user's location
+      if (!userLocation || !task.locations?.latitude || !task.locations?.longitude) {
+        return false
+      }
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        task.locations.latitude,
+        task.locations.longitude
+      )
+      return distance <= 100 // 100 meters
+    }
+    
     return true
   })
   
@@ -120,6 +197,48 @@ export function TaskList({ tasks }: TaskListProps) {
       }
       // If dates are equal, fall back to A-Z
       return a.task_description.localeCompare(b.task_description)
+    } else if (sortType === 'proximity') {
+      // Sort by proximity to user's location (closest first)
+      if (!userLocation) {
+        // If no user location, fall back to A-Z
+        return a.task_description.localeCompare(b.task_description)
+      }
+      
+      const aHasLocation = a.locations?.latitude != null && a.locations?.longitude != null
+      const bHasLocation = b.locations?.latitude != null && b.locations?.longitude != null
+      
+      // Tasks without locations go to the end
+      if (!aHasLocation && !bHasLocation) {
+        return a.task_description.localeCompare(b.task_description)
+      }
+      if (!aHasLocation) return 1 // a goes after b
+      if (!bHasLocation) return -1 // b goes after a
+      
+      // At this point, we know both have locations (TypeScript doesn't know this, so we assert)
+      const aLat = a.locations!.latitude!
+      const aLon = a.locations!.longitude!
+      const bLat = b.locations!.latitude!
+      const bLon = b.locations!.longitude!
+      
+      // Calculate distances
+      const aDistance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        aLat,
+        aLon
+      )
+      const bDistance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        bLat,
+        bLon
+      )
+      
+      if (aDistance !== bDistance) {
+        return aDistance - bDistance // Ascending: closest first
+      }
+      // If distances are equal, fall back to A-Z
+      return a.task_description.localeCompare(b.task_description)
     }
     return 0
   })
@@ -149,6 +268,7 @@ export function TaskList({ tasks }: TaskListProps) {
           <option value="A-Z">Sort: A-Z</option>
           <option value="priority">Sort: Priority</option>
           <option value="due-date">Sort: Due Date</option>
+          <option value="proximity">Sort: Proximity</option>
         </select>
         {filterType && filterValue && (
           <>
@@ -162,7 +282,10 @@ export function TaskList({ tasks }: TaskListProps) {
               Clear filter
             </button>
             <span className="text-sm text-zinc-600 dark:text-zinc-400">
-              Showing {filteredUncompletedCount} of {uncompletedCount} tasks
+              {filterType === 'proximity' 
+                ? `Showing tasks within 100m (${filteredUncompletedCount} of ${uncompletedCount} tasks)`
+                : `Showing ${filteredUncompletedCount} of ${uncompletedCount} tasks`
+              }
             </span>
           </>
         )}

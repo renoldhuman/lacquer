@@ -5,11 +5,12 @@
 -- USER
 ------------------------------------------------------------
 CREATE TABLE users (
-    user_id      uuid PRIMARY KEY,
-    created_at   timestamptz NOT NULL DEFAULT now(),
-    updated_at   timestamptz NOT NULL DEFAULT now(),
-    username     text        NOT NULL,
-    email        text        NOT NULL UNIQUE
+    user_id              uuid PRIMARY KEY,
+    created_at           timestamptz NOT NULL DEFAULT now(),
+    updated_at           timestamptz NOT NULL DEFAULT now(),
+    username             text        NOT NULL,
+    email                text        NOT NULL UNIQUE,
+    auto_location_filter boolean     NOT NULL DEFAULT true
 );
 
 ------------------------------------------------------------

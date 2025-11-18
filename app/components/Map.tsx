@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
-import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api'
+import { GoogleMap, Marker, Circle } from '@react-google-maps/api'
 
 export interface LocationData {
   address: string
@@ -34,6 +34,10 @@ interface MapProps {
   selectedLocation?: LocationData | null
   locations?: LocationPin[]
   tasks?: Task[]
+  userLocation?: {
+    latitude: number
+    longitude: number
+  } | null
 }
 
 const defaultCenter = {
@@ -43,6 +47,26 @@ const defaultCenter = {
 
 const defaultZoom = 10
 
+// Haversine formula to calculate distance between two coordinates in meters
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000 // Earth's radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
 export function Map({ 
   center = defaultCenter, 
   zoom = defaultZoom, 
@@ -50,15 +74,32 @@ export function Map({
   onLocationSelect,
   selectedLocation,
   locations = [],
-  tasks = []
+  tasks = [],
+  userLocation = null
 }: MapProps) {
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null)
   const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null)
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const [mapCenter, setMapCenter] = useState(center)
   const [mapZoom, setMapZoom] = useState(zoom)
+  const [userLocationIcon, setUserLocationIcon] = useState<google.maps.Icon | undefined>(undefined)
   const infoWindowsRef = useRef<{ [key: string]: google.maps.InfoWindow }>({})
   const markersRef = useRef<{ [key: string]: google.maps.Marker }>({})
+
+  // Calculate which locations are within 100m of user
+  const nearbyLocations = useMemo(() => {
+    if (!userLocation) return []
+    
+    return locations.filter(location => {
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        location.latitude,
+        location.longitude
+      )
+      return distance <= 100 // Within 100 meters
+    })
+  }, [userLocation, locations])
 
   const mapContainerStyle = useMemo(
     () => ({
@@ -75,6 +116,19 @@ export function Map({
     
     if (typeof window !== 'undefined' && window.google?.maps) {
       setGeocoder(new window.google.maps.Geocoder())
+      
+      // Create user location icon now that Google Maps API is loaded
+      if (window.google.maps.Size && window.google.maps.Point) {
+        setUserLocationIcon({
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+              <text x="16" y="24" font-size="24" text-anchor="middle">😎</text>
+            </svg>
+          `),
+          scaledSize: new window.google.maps.Size(32, 32),
+          anchor: new window.google.maps.Point(16, 16),
+        })
+      }
       
       // Fit bounds to show all locations if they exist
       if (locations.length > 0) {
@@ -295,11 +349,7 @@ export function Map({
   }
 
   return (
-    <LoadScript 
-      googleMapsApiKey={apiKey}
-      libraries={['places']}
-    >
-      <div className="relative w-full" style={{ height }}>
+    <div className="relative w-full" style={{ height }}>
         <GoogleMap
             mapContainerStyle={mapContainerStyle}
             center={currentMarkerPosition || mapCenter}
@@ -355,6 +405,32 @@ export function Map({
             )
           })}
           
+          {/* Circles for locations within 100m of user */}
+          {userLocation && nearbyLocations.map((location) => (
+            <Circle
+              key={`circle-${location.location_id}`}
+              center={{ lat: location.latitude, lng: location.longitude }}
+              radius={100} // 100 meters in meters
+              options={{
+                fillColor: '#3b82f6', // Blue
+                fillOpacity: 0.2, // Translucent
+                strokeColor: '#3b82f6', // Blue border
+                strokeOpacity: 0.5,
+                strokeWeight: 2,
+                clickable: false,
+                zIndex: 1,
+              }}
+            />
+          ))}
+
+          {/* User location marker */}
+          {userLocation && userLocationIcon && (
+            <Marker
+              position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+              icon={userLocationIcon}
+              title="Your location"
+            />
+          )}
           {/* Selected location marker (if different from permanent pins) */}
           {currentMarkerPosition && !locations.some(loc => 
             Math.abs(loc.latitude - currentMarkerPosition.lat) < 0.0001 &&
@@ -379,7 +455,6 @@ export function Map({
           </button>
         )}
       </div>
-    </LoadScript>
   )
 }
 
