@@ -14,6 +14,13 @@ export async function getTasks() {
           },
         },
         priorities: true,
+        locations: {
+          select: {
+            location_name: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
       },
       orderBy: {
         created_at: 'desc',
@@ -77,7 +84,17 @@ async function ensureMiscellaneousProject() {
   return project
 }
 
-export async function createTask(taskDescription: string, projectId?: string) {
+interface LocationData {
+  address: string
+  lat: number
+  lng: number
+}
+
+export async function createTask(
+  taskDescription: string, 
+  projectId?: string,
+  location?: LocationData
+) {
   try {
     let project
     
@@ -95,12 +112,44 @@ export async function createTask(taskDescription: string, projectId?: string) {
       project = await ensureMiscellaneousProject()
     }
 
+    // Create location if provided
+    let locationId: string | undefined = undefined
+    if (location) {
+      // Ensure a default user exists
+      let user = await prisma.users.findFirst()
+      
+      if (!user) {
+        user = await prisma.users.create({
+          data: {
+            user_id: randomUUID(),
+            username: 'default',
+            email: 'default@example.com',
+          },
+        })
+      }
+
+      // Create location in database
+      const createdLocation = await prisma.locations.create({
+        data: {
+          location_id: randomUUID(),
+          user_id: user.user_id,
+          location_name: location.address,
+          latitude: location.lat,
+          longitude: location.lng,
+          radius: 100, // Default radius of 100 meters
+        },
+      })
+
+      locationId = createdLocation.location_id
+    }
+
     // Create the task
     const task = await prisma.tasks.create({
       data: {
         task_id: randomUUID(),
         task_description: taskDescription,
         project_id: project.project_id,
+        location_id: locationId,
       },
       include: {
         projects: {
@@ -109,6 +158,11 @@ export async function createTask(taskDescription: string, projectId?: string) {
           },
         },
         priorities: true,
+        locations: {
+          select: {
+            location_name: true,
+          },
+        },
       },
     })
 

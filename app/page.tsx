@@ -1,5 +1,5 @@
 import { getTasks, getProjects } from '@/app/actions/tasks'
-import { AddTaskForm } from '@/app/components/AddTaskForm'
+import { TaskMapForm } from '@/app/components/TaskMapForm'
 
 export default async function Home() {
   const tasks = await getTasks()
@@ -12,10 +12,8 @@ export default async function Home() {
           Tasks
         </h1>
 
-        {/* Add Task Form */}
-        <div className="mb-8">
-          <AddTaskForm projects={projects} />
-        </div>
+        {/* Interactive Map and Task Form */}
+        <TaskMapForm projects={projects} />
 
         {/* Tasks List */}
         <div className="space-y-4">
@@ -34,8 +32,13 @@ export default async function Home() {
                     <p className="text-lg font-medium text-black dark:text-zinc-50">
                       {task.task_description}
                     </p>
-                    <div className="mt-2 flex items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
+                    <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
                       <span>Project: {task.projects.project_name}</span>
+                      {task.locations && (
+                        <span className="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                          📍 {task.locations.location_name.split(',')[0].trim()}
+                        </span>
+                      )}
                       {task.priorities && (
                         <span className="px-2 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800">
                           {task.priorities.priority_level}
