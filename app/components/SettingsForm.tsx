@@ -29,10 +29,10 @@ export function SettingsForm({ initialAutoLocationFilter }: SettingsFormProps) {
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <h2 className="text-lg font-semibold text-black dark:text-zinc-50 mb-1">
-            Auto Location Filter
+            Automatic Location Filtering
           </h2>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Automatically filter tasks to show only those within 100m of your current location on page load
+            Automatically filter tasks to only show tasks within 100m of you on page load
           </p>
         </div>
         <div className="ml-6">
