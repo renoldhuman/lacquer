@@ -23,6 +23,12 @@ export async function getTasks() {
             longitude: true,
           },
         },
+        task_notes: {
+          select: {
+            task_note_id: true,
+            task_note_content: true,
+          },
+        },
       },
       orderBy: {
         created_at: 'desc',
@@ -198,35 +204,56 @@ export async function createTask(
       project = await ensureMiscellaneousProject()
     }
 
-    // Create location if provided
+    // Create location if provided, or use existing one if coordinates match
     let locationId: string | undefined = undefined
     if (location) {
-      // Ensure a default user exists
-      let user = await prisma.users.findFirst()
-      
-      if (!user) {
-        user = await prisma.users.create({
-          data: {
-            user_id: randomUUID(),
-            username: 'default',
-            email: 'default@example.com',
+      // Check if a location with the same coordinates already exists
+      // Use a small tolerance (0.0001 degrees ≈ 11 meters) to account for minor variations
+      const tolerance = 0.0001
+      const existingLocation = await prisma.locations.findFirst({
+        where: {
+          latitude: {
+            gte: location.lat - tolerance,
+            lte: location.lat + tolerance,
           },
-        })
-      }
-
-      // Create location in database
-      const createdLocation = await prisma.locations.create({
-        data: {
-          location_id: randomUUID(),
-          user_id: user.user_id,
-          location_name: location.address,
-          latitude: location.lat,
-          longitude: location.lng,
-          radius: 100, // Default radius of 100 meters
+          longitude: {
+            gte: location.lng - tolerance,
+            lte: location.lng + tolerance,
+          },
         },
       })
 
-      locationId = createdLocation.location_id
+      if (existingLocation) {
+        // Use existing location
+        locationId = existingLocation.location_id
+      } else {
+        // Ensure a default user exists
+        let user = await prisma.users.findFirst()
+        
+        if (!user) {
+          user = await prisma.users.create({
+            data: {
+              user_id: randomUUID(),
+              username: 'default',
+              email: 'default@example.com',
+            },
+          })
+        }
+
+        // Create new location in database
+        const createdLocation = await prisma.locations.create({
+          data: {
+            location_id: randomUUID(),
+            user_id: user.user_id,
+            location_name: location.address,
+            latitude: location.lat,
+            longitude: location.lng,
+            radius: 100, // Default radius of 100 meters
+          },
+        })
+
+        locationId = createdLocation.location_id
+      }
     }
 
     // Create the task
@@ -293,6 +320,25 @@ export async function updateTaskDueDate(taskId: string, dueDate: Date | string |
   }
 }
 
+export async function updateTaskCompletion(taskId: string, isCompleted: boolean) {
+  try {
+    await prisma.tasks.update({
+      where: {
+        task_id: taskId,
+      },
+      data: {
+        is_completed: isCompleted,
+      },
+    })
+
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating task completion:', error)
+    throw error
+  }
+}
+
 export async function deleteTask(taskId: string) {
   try {
     await prisma.tasks.delete({
@@ -305,6 +351,47 @@ export async function deleteTask(taskId: string) {
     return { success: true }
   } catch (error) {
     console.error('Error deleting task:', error)
+    throw error
+  }
+}
+
+export async function upsertTaskNote(taskId: string, content: string) {
+  try {
+    // Get the task to check if it already has a note
+    const task = await prisma.tasks.findUnique({
+      where: { task_id: taskId },
+      select: { task_note_id: true },
+    })
+
+    if (task?.task_note_id) {
+      // Update existing note
+      await prisma.task_notes.update({
+        where: { task_note_id: task.task_note_id },
+        data: {
+          task_note_content: content,
+          updated_at: new Date(),
+        },
+      })
+    } else {
+      // Create new note and link it to the task
+      const noteId = randomUUID()
+      await prisma.task_notes.create({
+        data: {
+          task_note_id: noteId,
+          task_note_content: content,
+        },
+      })
+      
+      await prisma.tasks.update({
+        where: { task_id: taskId },
+        data: { task_note_id: noteId },
+      })
+    }
+
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('Error upserting task note:', error)
     throw error
   }
 }

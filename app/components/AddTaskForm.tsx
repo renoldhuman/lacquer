@@ -9,15 +9,23 @@ interface Project {
   project_name: string
 }
 
+interface PreviousLocation {
+  location_id: string
+  location_name: string
+  latitude: number
+  longitude: number
+}
+
 interface AddTaskFormProps {
   projects: Project[]
   location: LocationData | null
   onLocationSelect: (location: LocationData) => void
   onLocationClear: () => void
   onProjectCreated?: () => void
+  previousLocations?: PreviousLocation[]
 }
 
-export function AddTaskForm({ projects, location, onLocationSelect, onLocationClear, onProjectCreated }: AddTaskFormProps) {
+export function AddTaskForm({ projects, location, onLocationSelect, onLocationClear, onProjectCreated, previousLocations = [] }: AddTaskFormProps) {
   const [taskDescription, setTaskDescription] = useState('')
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [dueDate, setDueDate] = useState<string>('')
@@ -28,16 +36,19 @@ export function AddTaskForm({ projects, location, onLocationSelect, onLocationCl
   const [showNewProjectInput, setShowNewProjectInput] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [isCreatingProject, setIsCreatingProject] = useState(false)
+  const [showPreviousLocations, setShowPreviousLocations] = useState(false)
+  const [isAddressInputFocused, setIsAddressInputFocused] = useState(false)
   const addressInputRef = useRef<HTMLInputElement>(null)
   const newProjectInputRef = useRef<HTMLInputElement>(null)
+  const previousLocationsRef = useRef<HTMLDivElement>(null)
 
   // Initialize Google Places Autocomplete
   useEffect(() => {
     const initAutocomplete = () => {
       if (typeof window !== 'undefined' && window.google && window.google.maps && window.google.maps.places && addressInputRef.current && !autocomplete) {
         const autocompleteInstance = new google.maps.places.Autocomplete(addressInputRef.current, {
-          types: ['address'],
-          fields: ['formatted_address', 'geometry'],
+          types: ['address', 'establishment', 'geocode'],
+          fields: ['formatted_address', 'name', 'geometry'],
         })
 
         autocompleteInstance.addListener('place_changed', () => {
@@ -47,7 +58,11 @@ export function AddTaskForm({ projects, location, onLocationSelect, onLocationCl
 
           const lat = place.geometry.location.lat()
           const lng = place.geometry.location.lng()
-          const address = place.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          // Use name for establishments/places, formatted_address for addresses
+          // Combine both if available for better context
+          const address = place.name && place.formatted_address 
+            ? `${place.name}, ${place.formatted_address}`
+            : place.formatted_address || place.name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`
 
           setAddressInputValue(address)
           onLocationSelect({ address, lat, lng })
@@ -73,6 +88,45 @@ export function AddTaskForm({ projects, location, onLocationSelect, onLocationCl
       setAddressInputValue(location.address)
     }
   }, [location])
+
+  // Show previous locations dropdown when input is focused and empty
+  useEffect(() => {
+    if (isAddressInputFocused && !addressInputValue && previousLocations.length > 0) {
+      setShowPreviousLocations(true)
+    } else {
+      setShowPreviousLocations(false)
+    }
+  }, [isAddressInputFocused, addressInputValue, previousLocations])
+
+  // Close previous locations dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        previousLocationsRef.current && 
+        !previousLocationsRef.current.contains(event.target as Node) &&
+        addressInputRef.current &&
+        !addressInputRef.current.contains(event.target as Node)
+      ) {
+        setShowPreviousLocations(false)
+      }
+    }
+
+    if (showPreviousLocations) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPreviousLocations])
+
+  const handlePreviousLocationSelect = (prevLocation: PreviousLocation) => {
+    onLocationSelect({
+      address: prevLocation.location_name,
+      lat: prevLocation.latitude,
+      lng: prevLocation.longitude,
+    })
+    setAddressInputValue(prevLocation.location_name)
+    setShowPreviousLocations(false)
+    addressInputRef.current?.blur()
+  }
 
   // Focus new project input when it appears
   useEffect(() => {
@@ -170,6 +224,11 @@ export function AddTaskForm({ projects, location, onLocationSelect, onLocationCl
                 }
                 setError(null)
               }}
+              onFocus={() => setIsAddressInputFocused(true)}
+              onBlur={() => {
+                // Delay to allow click on dropdown items
+                setTimeout(() => setIsAddressInputFocused(false), 200)
+              }}
               className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-500 dark:placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:focus:ring-zinc-400"
               disabled={isPending}
             />
@@ -187,6 +246,27 @@ export function AddTaskForm({ projects, location, onLocationSelect, onLocationCl
               >
                 Clear
               </button>
+            )}
+            
+            {/* Previous Locations Dropdown */}
+            {showPreviousLocations && previousLocations.length > 0 && (
+              <div
+                ref={previousLocationsRef}
+                className="absolute z-10 w-full mt-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg max-h-64 overflow-auto"
+              >
+                <div className="py-1">
+                  {previousLocations.map((prevLocation) => (
+                    <button
+                      key={prevLocation.location_id}
+                      type="button"
+                      onClick={() => handlePreviousLocationSelect(prevLocation)}
+                      className="w-full px-4 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-700 text-sm text-black dark:text-zinc-50"
+                    >
+                      {prevLocation.location_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

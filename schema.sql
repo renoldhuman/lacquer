@@ -113,6 +113,9 @@ CREATE TABLE tasks (
     task_note_id     uuid UNIQUE REFERENCES task_notes (task_note_id),
 
     -- Optional due date
-    due_date         timestamptz
+    due_date         timestamptz,
+
+    -- Task completion status
+    is_completed     boolean     NOT NULL DEFAULT false
 );
 

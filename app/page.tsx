@@ -11,11 +11,11 @@ export default async function Home() {
     <div className="min-h-screen bg-zinc-50 dark:bg-black py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-black dark:text-zinc-50 mb-8">
-          Tasks
+          Lacquer
         </h1>
 
         {/* Interactive Map and Task Form */}
-        <TaskMapForm projects={projects} locations={locations} />
+        <TaskMapForm projects={projects} locations={locations} tasks={tasks} />
 
         {/* Tasks List */}
         <TaskList tasks={tasks} />

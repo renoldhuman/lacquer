@@ -17,12 +17,20 @@ interface Location {
   longitude: number
 }
 
+interface Task {
+  task_id: string
+  task_description: string
+  location_id: string | null
+  created_at: Date | string
+}
+
 interface TaskMapFormProps {
   projects: Project[]
   locations: Location[]
+  tasks: Task[]
 }
 
-export function TaskMapForm({ projects, locations }: TaskMapFormProps) {
+export function TaskMapForm({ projects, locations, tasks }: TaskMapFormProps) {
   const [location, setLocation] = useState<LocationData | null>(null)
   const router = useRouter()
 
@@ -36,7 +44,7 @@ export function TaskMapForm({ projects, locations }: TaskMapFormProps) {
       {/* Interactive Map */}
       <div className="mb-8">
         <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-          <Map height="400px" onLocationSelect={setLocation} selectedLocation={location} locations={locations} />
+          <Map height="400px" onLocationSelect={setLocation} selectedLocation={location} locations={locations} tasks={tasks} />
         </div>
       </div>
 
@@ -48,6 +56,7 @@ export function TaskMapForm({ projects, locations }: TaskMapFormProps) {
           onLocationSelect={setLocation}
           onLocationClear={() => setLocation(null)}
           onProjectCreated={handleProjectCreated}
+          previousLocations={locations}
         />
       </div>
     </>
