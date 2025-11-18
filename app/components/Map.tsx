@@ -21,6 +21,7 @@ interface Task {
   task_description: string
   location_id: string | null
   created_at: Date | string
+  is_completed: boolean
 }
 
 interface MapProps {
@@ -244,11 +245,12 @@ export function Map({
     }
   }, [map, locations, zoom])
 
-  // Group tasks by location_id
+  // Group tasks by location_id, filtering out completed tasks
   const tasksByLocation = useMemo(() => {
     const grouped: { [key: string]: Task[] } = {}
     tasks.forEach((task: Task) => {
-      if (task.location_id) {
+      // Only include uncompleted tasks
+      if (task.location_id && !task.is_completed) {
         if (!grouped[task.location_id]) {
           grouped[task.location_id] = []
         }
@@ -285,15 +287,22 @@ export function Map({
       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
         `
     
-    locationTasks.forEach((task: Task, index: number) => {
-      const truncatedTask = task.task_description.length > 20 
-        ? task.task_description.substring(0, 20) + '...'
-        : task.task_description
+    if (locationTasks.length === 0) {
       content += `
         <tr>
-          <td style="padding: 4px 0; color: #111827;">${escapeHtml(truncatedTask)}</td>
+          <td style="padding: 4px 0; color: #111827;">No tasks at this location :)</td>
         </tr>`
-    })
+    } else {
+      locationTasks.forEach((task: Task, index: number) => {
+        const truncatedTask = task.task_description.length > 20 
+          ? task.task_description.substring(0, 20) + '...'
+          : task.task_description
+        content += `
+          <tr>
+            <td style="padding: 4px 0; color: #111827;">${escapeHtml(truncatedTask)}</td>
+          </tr>`
+      })
+    }
     
     content += `</table></div>`
     return content
