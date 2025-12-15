@@ -47,7 +47,7 @@ export function AddTaskForm({ projects, location, onLocationSelect, onLocationCl
     const initAutocomplete = () => {
       if (typeof window !== 'undefined' && window.google && window.google.maps && window.google.maps.places && addressInputRef.current && !autocomplete) {
         const autocompleteInstance = new google.maps.places.Autocomplete(addressInputRef.current, {
-          types: ['address', 'establishment', 'geocode'],
+          types: ['establishment', 'geocode'],
           fields: ['formatted_address', 'name', 'geometry'],
         })
 

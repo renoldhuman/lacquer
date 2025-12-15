@@ -245,6 +245,16 @@ export function Map({
     }
   }, [map, locations, zoom])
 
+  const handleUserLocationClick = useCallback(() => {
+    if (!map || !userLocation) return
+    
+    // Recenter map to user location with max zoom level (18)
+    map.setCenter({ lat: userLocation.latitude, lng: userLocation.longitude })
+    map.setZoom(18)
+    setMapCenter({ lat: userLocation.latitude, lng: userLocation.longitude })
+    setMapZoom(18)
+  }, [map, userLocation])
+
   // Group tasks by location_id, filtering out completed tasks
   const tasksByLocation = useMemo(() => {
     const grouped: { [key: string]: Task[] } = {}
@@ -438,6 +448,7 @@ export function Map({
               position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
               icon={userLocationIcon}
               title="Your location"
+              onClick={handleUserLocationClick}
             />
           )}
           {/* Selected location marker (if different from permanent pins) */}

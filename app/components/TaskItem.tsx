@@ -36,9 +36,10 @@ interface TaskItemProps {
   onLocationClick?: (locationId: string) => void
   activeProjectFilter?: string | null
   activeLocationFilter?: string | null
+  showProject?: boolean
 }
 
-export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectFilter, activeLocationFilter }: TaskItemProps) {
+export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectFilter, activeLocationFilter, showProject = true }: TaskItemProps) {
   const [isPending, startTransition] = useTransition()
   const [isCompleting, setIsCompleting] = useState(false)
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false)
@@ -236,15 +237,17 @@ export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectF
             )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
-            <Capsule
-              variant="project"
-              as="button"
-              onClick={() => onProjectClick?.(task.projects.project_id)}
-              active={activeProjectFilter === task.projects.project_id}
-              title="Filter by project"
-            >
-              📁 {task.projects.project_name}
-            </Capsule>
+            {showProject && (
+              <Capsule
+                variant="project"
+                as="button"
+                onClick={() => onProjectClick?.(task.projects.project_id)}
+                active={activeProjectFilter === task.projects.project_id}
+                title="Filter by project"
+              >
+                📁 {task.projects.project_name}
+              </Capsule>
+            )}
             {task.locations && task.location_id && (
               <Capsule
                 variant="location"

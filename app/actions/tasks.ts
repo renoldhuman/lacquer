@@ -69,6 +69,61 @@ export async function getProjects() {
   }
 }
 
+export async function getProjectsWithTasks() {
+  try {
+    const projects = await prisma.projects.findMany({
+      include: {
+        tasks: {
+          include: {
+            priorities: true,
+            locations: {
+              select: {
+                location_id: true,
+                location_name: true,
+                latitude: true,
+                longitude: true,
+              },
+            },
+            task_notes: {
+              select: {
+                task_note_id: true,
+                task_note_content: true,
+              },
+            },
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        },
+      },
+      orderBy: {
+        project_name: 'asc',
+      },
+    })
+    
+    // Convert Decimal values to numbers for client components
+    return projects.map(project => ({
+      ...project,
+      tasks: project.tasks.map(task => ({
+        ...task,
+        projects: {
+          project_id: project.project_id,
+          project_name: project.project_name,
+        },
+        locations: task.locations ? {
+          location_id: task.locations.location_id,
+          location_name: task.locations.location_name,
+          latitude: task.locations.latitude ? Number(task.locations.latitude) : null,
+          longitude: task.locations.longitude ? Number(task.locations.longitude) : null,
+        } : null,
+      })),
+    }))
+  } catch (error) {
+    console.error('Error fetching projects with tasks:', error)
+    throw error
+  }
+}
+
 export async function getLocations() {
   try {
     const locations = await prisma.locations.findMany({
