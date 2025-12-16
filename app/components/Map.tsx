@@ -167,9 +167,15 @@ export function Map({
           
           setMapZoom(calculatedZoom)
         }, 100)
+      } else if (userLocation) {
+        // If no locations but user location exists, center on user location
+        mapInstance.setCenter({ lat: userLocation.latitude, lng: userLocation.longitude })
+        mapInstance.setZoom(15) // Reasonable zoom level to see surrounding area
+        setMapCenter({ lat: userLocation.latitude, lng: userLocation.longitude })
+        setMapZoom(15)
       }
     }
-  }, [locations, zoom])
+  }, [locations, zoom, userLocation])
 
   // Update map center when location is selected from form
   useEffect(() => {
@@ -180,6 +186,16 @@ export function Map({
       setMarkerPosition(position)
     }
   }, [selectedLocation, map])
+
+  // Center map on user location when it becomes available (if no locations exist)
+  useEffect(() => {
+    if (userLocation && map && locations.length === 0) {
+      map.setCenter({ lat: userLocation.latitude, lng: userLocation.longitude })
+      map.setZoom(15)
+      setMapCenter({ lat: userLocation.latitude, lng: userLocation.longitude })
+      setMapZoom(15)
+    }
+  }, [userLocation, map, locations.length])
 
   const handleMapClick = useCallback((e: google.maps.MapMouseEvent) => {
     if (!e.latLng || !geocoder || !onLocationSelect) return

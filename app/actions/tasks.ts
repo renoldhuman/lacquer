@@ -1,12 +1,20 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/prisma-auth'
 import { revalidatePath } from 'next/cache'
 import { randomUUID } from 'crypto'
 
 export async function getTasks() {
   try {
+    const userId = await requireAuth()
+    
     const tasks = await prisma.tasks.findMany({
+      where: {
+        projects: {
+          user_id: userId,
+        },
+      },
       include: {
         projects: {
           select: {
@@ -53,7 +61,12 @@ export async function getTasks() {
 
 export async function getProjects() {
   try {
+    const userId = await requireAuth()
+    
     const projects = await prisma.projects.findMany({
+      where: {
+        user_id: userId,
+      },
       select: {
         project_id: true,
         project_name: true,
@@ -71,7 +84,12 @@ export async function getProjects() {
 
 export async function getProjectsWithTasks() {
   try {
+    const userId = await requireAuth()
+    
     const projects = await prisma.projects.findMany({
+      where: {
+        user_id: userId,
+      },
       include: {
         tasks: {
           include: {
@@ -126,9 +144,19 @@ export async function getProjectsWithTasks() {
 
 export async function getLocationsWithTasks() {
   try {
+    const userId = await requireAuth()
+    
     const locations = await prisma.locations.findMany({
+      where: {
+        user_id: userId,
+      },
       include: {
         tasks: {
+          where: {
+            projects: {
+              user_id: userId,
+            },
+          },
           include: {
             priorities: true,
             projects: {
@@ -158,6 +186,9 @@ export async function getLocationsWithTasks() {
     const tasksWithoutLocations = await prisma.tasks.findMany({
       where: {
         location_id: null,
+        projects: {
+          user_id: userId,
+        },
       },
       include: {
         priorities: true,
@@ -218,7 +249,12 @@ export async function getLocationsWithTasks() {
 
 export async function getLocations() {
   try {
+    const userId = await requireAuth()
+    
     const locations = await prisma.locations.findMany({
+      where: {
+        user_id: userId,
+      },
       select: {
         location_id: true,
         location_name: true,
@@ -246,8 +282,10 @@ export async function getLocations() {
 
 export async function getUserAutoLocationFilter() {
   try {
-    // Get the first user (default user pattern)
-    const user = await prisma.users.findFirst({
+    const userId = await requireAuth()
+    
+    const user = await prisma.users.findUnique({
+      where: { user_id: userId },
       select: {
         auto_location_filter: true,
       },
@@ -264,26 +302,13 @@ export async function getUserAutoLocationFilter() {
 
 export async function updateUserAutoLocationFilter(enabled: boolean) {
   try {
-    // Get the first user (default user pattern)
-    let user = await prisma.users.findFirst()
+    const userId = await requireAuth()
     
-    if (!user) {
-      // Create default user if none exists
-      user = await prisma.users.create({
-        data: {
-          user_id: randomUUID(),
-          username: 'default',
-          email: 'default@example.com',
-          auto_location_filter: enabled,
-        },
-      })
-    } else {
-      // Update existing user
-      user = await prisma.users.update({
-        where: { user_id: user.user_id },
-        data: { auto_location_filter: enabled },
-      })
-    }
+    // Update authenticated user's setting
+    await prisma.users.update({
+      where: { user_id: userId },
+      data: { auto_location_filter: enabled },
+    })
     
     revalidatePath('/settings')
     revalidatePath('/')
@@ -296,22 +321,14 @@ export async function updateUserAutoLocationFilter(enabled: boolean) {
 
 export async function createProject(projectName: string, projectDescription?: string | null) {
   try {
-    // Ensure a default user exists
-    let user = await prisma.users.findFirst()
-    
-    if (!user) {
-      user = await prisma.users.create({
-        data: {
-          user_id: randomUUID(),
-          username: 'default',
-          email: 'default@example.com',
-        },
-      })
-    }
+    const userId = await requireAuth()
 
-    // Check if project with same name already exists
+    // Check if project with same name already exists for this user
     const existingProject = await prisma.projects.findFirst({
-      where: { project_name: projectName },
+      where: { 
+        project_name: projectName,
+        user_id: userId,
+      },
     })
 
     if (existingProject) {
@@ -322,7 +339,7 @@ export async function createProject(projectName: string, projectDescription?: st
     const project = await prisma.projects.create({
       data: {
         project_id: randomUUID(),
-        user_id: user.user_id,
+        user_id: userId,
         project_name: projectName.trim(),
         project_description: projectDescription?.trim() || null,
       },
@@ -341,30 +358,20 @@ export async function createProject(projectName: string, projectDescription?: st
   }
 }
 
-async function ensureMiscellaneousProject() {
-  // First, ensure a default user exists
-  let user = await prisma.users.findFirst()
-  
-  if (!user) {
-    user = await prisma.users.create({
-      data: {
-        user_id: randomUUID(),
-        username: 'default',
-        email: 'default@example.com',
-      },
-    })
-  }
-
-  // Ensure "Miscellaneous" project exists
+async function ensureMiscellaneousProject(userId: string) {
+  // Ensure "Miscellaneous" project exists for this user
   let project = await prisma.projects.findFirst({
-    where: { project_name: 'Miscellaneous' },
+    where: { 
+      project_name: 'Miscellaneous',
+      user_id: userId,
+    },
   })
 
   if (!project) {
     project = await prisma.projects.create({
       data: {
         project_id: randomUUID(),
-        user_id: user.user_id,
+        user_id: userId,
         project_name: 'Miscellaneous',
         project_description: 'Default project for one-offs or tasks that don\'t require a specific project',
       },
@@ -388,30 +395,35 @@ export async function createTask(
   priorityLevel?: string
 ) {
   try {
+    const userId = await requireAuth()
     let project
     
     if (projectId) {
-      // Use the specified project
-      project = await prisma.projects.findUnique({
-        where: { project_id: projectId },
+      // Use the specified project, but verify it belongs to the user
+      project = await prisma.projects.findFirst({
+        where: { 
+          project_id: projectId,
+          user_id: userId,
+        },
       })
       
       if (!project) {
-        throw new Error('Specified project not found')
+        throw new Error('Specified project not found or access denied')
       }
     } else {
       // If no project specified, use Miscellaneous
-      project = await ensureMiscellaneousProject()
+      project = await ensureMiscellaneousProject(userId)
     }
 
     // Create location if provided, or use existing one if coordinates match
     let locationId: string | undefined = undefined
     if (location) {
-      // Check if a location with the same coordinates already exists
+      // Check if a location with the same coordinates already exists for this user
       // Use a small tolerance (0.0001 degrees ≈ 11 meters) to account for minor variations
       const tolerance = 0.0001
       const existingLocation = await prisma.locations.findFirst({
         where: {
+          user_id: userId,
           latitude: {
             gte: location.lat - tolerance,
             lte: location.lat + tolerance,
@@ -427,24 +439,11 @@ export async function createTask(
         // Use existing location
         locationId = existingLocation.location_id
       } else {
-        // Ensure a default user exists
-        let user = await prisma.users.findFirst()
-        
-        if (!user) {
-          user = await prisma.users.create({
-            data: {
-              user_id: randomUUID(),
-              username: 'default',
-              email: 'default@example.com',
-            },
-          })
-        }
-
-        // Create new location in database
+        // Create new location in database for this user
         const createdLocation = await prisma.locations.create({
           data: {
             location_id: randomUUID(),
-            user_id: user.user_id,
+            user_id: userId,
             location_name: location.address,
             latitude: location.lat,
             longitude: location.lng,
@@ -491,6 +490,22 @@ export async function createTask(
 
 export async function updateTaskDueDate(taskId: string, dueDate: Date | string | null) {
   try {
+    const userId = await requireAuth()
+    
+    // Verify task belongs to user
+    const task = await prisma.tasks.findFirst({
+      where: {
+        task_id: taskId,
+        projects: {
+          user_id: userId,
+        },
+      },
+    })
+    
+    if (!task) {
+      throw new Error('Task not found or access denied')
+    }
+    
     let parsedDate: Date | null = null
     
     if (dueDate) {
@@ -523,6 +538,22 @@ export async function updateTaskDueDate(taskId: string, dueDate: Date | string |
 
 export async function updateTaskCompletion(taskId: string, isCompleted: boolean) {
   try {
+    const userId = await requireAuth()
+    
+    // Verify task belongs to user
+    const task = await prisma.tasks.findFirst({
+      where: {
+        task_id: taskId,
+        projects: {
+          user_id: userId,
+        },
+      },
+    })
+    
+    if (!task) {
+      throw new Error('Task not found or access denied')
+    }
+    
     await prisma.tasks.update({
       where: {
         task_id: taskId,
@@ -542,6 +573,22 @@ export async function updateTaskCompletion(taskId: string, isCompleted: boolean)
 
 export async function deleteTask(taskId: string) {
   try {
+    const userId = await requireAuth()
+    
+    // Verify task belongs to user
+    const task = await prisma.tasks.findFirst({
+      where: {
+        task_id: taskId,
+        projects: {
+          user_id: userId,
+        },
+      },
+    })
+    
+    if (!task) {
+      throw new Error('Task not found or access denied')
+    }
+    
     await prisma.tasks.delete({
       where: {
         task_id: taskId,
@@ -558,11 +605,22 @@ export async function deleteTask(taskId: string) {
 
 export async function upsertTaskNote(taskId: string, content: string) {
   try {
-    // Get the task to check if it already has a note
-    const task = await prisma.tasks.findUnique({
-      where: { task_id: taskId },
+    const userId = await requireAuth()
+    
+    // Get the task to check if it already has a note and verify ownership
+    const task = await prisma.tasks.findFirst({
+      where: { 
+        task_id: taskId,
+        projects: {
+          user_id: userId,
+        },
+      },
       select: { task_note_id: true },
     })
+    
+    if (!task) {
+      throw new Error('Task not found or access denied')
+    }
 
     if (task?.task_note_id) {
       // Update existing note
