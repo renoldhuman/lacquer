@@ -22,6 +22,7 @@ interface Task {
   task_description: string
   location_id: string | null
   created_at: Date | string
+  is_completed: boolean
 }
 
 interface TaskMapFormProps {
