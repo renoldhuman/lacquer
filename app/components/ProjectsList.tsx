@@ -1,7 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { TaskItem } from './TaskItem'
+import { DeleteProjectModal } from './DeleteProjectModal'
+import { deleteProject } from '@/app/actions/tasks'
 
 interface Project {
   project_id: string
@@ -42,6 +45,10 @@ interface ProjectsListProps {
 export function ProjectsList({ projects }: ProjectsListProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set())
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const router = useRouter()
 
   const toggleProject = (projectId: string) => {
     const newExpanded = new Set(expandedProjects)
@@ -90,6 +97,7 @@ export function ProjectsList({ projects }: ProjectsListProps) {
           const visibleTasks = showCompletedTasks 
             ? project.tasks 
             : project.tasks.filter(t => !t.is_completed)
+          const isMiscellaneous = project.project_name === 'Miscellaneous'
 
           return (
             <div
@@ -97,9 +105,17 @@ export function ProjectsList({ projects }: ProjectsListProps) {
               className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden"
             >
               {/* Project Header - Clickable to expand/collapse */}
-              <button
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => toggleProject(project.project_id)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    toggleProject(project.project_id)
+                  }
+                }}
+                className="group w-full px-6 py-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left cursor-pointer"
               >
                 <div className="flex items-center gap-3">
                   <svg
@@ -158,8 +174,27 @@ export function ProjectsList({ projects }: ProjectsListProps) {
                     )}
                     {taskCount === 0 && <span>No tasks</span>}
                   </span>
+
+                  {/* Delete Project (shows on hover). Miscellaneous is not deletable. */}
+                  {!isMiscellaneous && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteError(null)
+                        setDeleteTarget({ id: project.project_id, name: project.project_name })
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                      title="Delete project"
+                      aria-label="Delete project"
+                    >
+                      <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0H7m3-3h4a1 1 0 011 1v2H9V5a1 1 0 011-1z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-              </button>
+              </div>
 
               {/* Tasks List - Shown when expanded */}
               {isExpanded && (
@@ -186,6 +221,39 @@ export function ProjectsList({ projects }: ProjectsListProps) {
           )
         })
       )}
+
+      <DeleteProjectModal
+        isOpen={!!deleteTarget}
+        projectName={deleteTarget?.name || ''}
+        isLoading={isDeleting}
+        error={deleteError}
+        onCancel={() => {
+          if (isDeleting) return
+          setDeleteTarget(null)
+          setDeleteError(null)
+        }}
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          setIsDeleting(true)
+          setDeleteError(null)
+          try {
+            await deleteProject(deleteTarget.id)
+            // Close modal and refresh data
+            setDeleteTarget(null)
+            // Remove from expanded state locally to avoid stale UI while refresh happens
+            setExpandedProjects((prev) => {
+              const next = new Set(prev)
+              next.delete(deleteTarget.id)
+              return next
+            })
+            router.refresh()
+          } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : 'Failed to delete project')
+          } finally {
+            setIsDeleting(false)
+          }
+        }}
+      />
     </div>
   )
 }

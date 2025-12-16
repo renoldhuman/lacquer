@@ -43,8 +43,10 @@ export async function getTasks() {
       },
     })
     
+    type TaskRow = (typeof tasks)[number]
+
     // Convert Decimal values to numbers for client components
-    return tasks.map(task => ({
+    return tasks.map((task: TaskRow) => ({
       ...task,
       locations: task.locations ? {
         location_id: task.locations.location_id,
@@ -119,10 +121,13 @@ export async function getProjectsWithTasks() {
       },
     })
     
+    type ProjectRow = (typeof projects)[number]
+    type ProjectTaskRow = ProjectRow['tasks'][number]
+
     // Convert Decimal values to numbers for client components
-    return projects.map(project => ({
+    return projects.map((project: ProjectRow) => ({
       ...project,
-      tasks: project.tasks.map(task => ({
+      tasks: project.tasks.map((task: ProjectTaskRow) => ({
         ...task,
         projects: {
           project_id: project.project_id,
@@ -210,12 +215,16 @@ export async function getLocationsWithTasks() {
       },
     })
     
+    type LocationRow = (typeof locations)[number]
+    type LocationTaskRow = LocationRow['tasks'][number]
+    type TaskWithoutLocationRow = (typeof tasksWithoutLocations)[number]
+
     // Convert Decimal values to numbers for client components
-    const locationsWithTasks = locations.map(location => ({
+    const locationsWithTasks = locations.map((location: LocationRow) => ({
       ...location,
       latitude: location.latitude ? Number(location.latitude) : null,
       longitude: location.longitude ? Number(location.longitude) : null,
-      tasks: location.tasks.map(task => ({
+      tasks: location.tasks.map((task: LocationTaskRow) => ({
         ...task,
         locations: {
           location_id: location.location_id,
@@ -233,7 +242,7 @@ export async function getLocationsWithTasks() {
       latitude: null,
       longitude: null,
       radius: 0,
-      tasks: tasksWithoutLocations.map(task => ({
+      tasks: tasksWithoutLocations.map((task: TaskWithoutLocationRow) => ({
         ...task,
         locations: null,
       })),
@@ -263,15 +272,18 @@ export async function getLocations() {
       },
     })
     
+    type LocationRow = (typeof locations)[number]
+    type MappedLocation = { location_id: string; location_name: string; latitude: number | null; longitude: number | null }
+
     // Convert Decimal values to numbers for client components
     return locations
-      .map(location => ({
+      .map((location: LocationRow) => ({
         location_id: location.location_id,
         location_name: location.location_name,
         latitude: location.latitude ? Number(location.latitude) : null,
         longitude: location.longitude ? Number(location.longitude) : null,
       }))
-      .filter((location): location is { location_id: string; location_name: string; latitude: number; longitude: number } => 
+      .filter((location: MappedLocation): location is { location_id: string; location_name: string; latitude: number; longitude: number } => 
         location.latitude !== null && location.longitude !== null
       )
   } catch (error) {
@@ -354,6 +366,79 @@ export async function createProject(projectName: string, projectDescription?: st
     return project
   } catch (error) {
     console.error('Error creating project:', error)
+    throw error
+  }
+}
+
+export async function deleteProject(projectId: string) {
+  try {
+    const userId = await requireAuth()
+
+    const project = await prisma.projects.findFirst({
+      where: {
+        project_id: projectId,
+        user_id: userId,
+      },
+      select: {
+        project_id: true,
+        project_name: true,
+      },
+    })
+
+    if (!project) {
+      throw new Error('Project not found or access denied')
+    }
+
+    if (project.project_name === 'Miscellaneous') {
+      throw new Error('The Miscellaneous project cannot be deleted')
+    }
+
+    // Delete tasks in this project first
+    const taskNoteIds = await prisma.tasks.findMany({
+      where: { project_id: project.project_id },
+      select: { task_note_id: true },
+    })
+    type TaskNoteRow = (typeof taskNoteIds)[number]
+
+    await prisma.tasks.deleteMany({
+      where: { project_id: project.project_id },
+    })
+
+    // Delete the project
+    await prisma.projects.delete({
+      where: { project_id: project.project_id },
+    })
+
+    // Best-effort cleanup of orphaned notes (notes are 1:1 via unique task_note_id)
+    const noteIds = taskNoteIds
+      .map((t: TaskNoteRow) => t.task_note_id)
+      .filter((id: string | null): id is string => !!id)
+    if (noteIds.length > 0) {
+      const stillReferenced = await prisma.tasks.findMany({
+        where: { task_note_id: { in: noteIds } },
+        select: { task_note_id: true },
+      })
+      type StillReferencedRow = (typeof stillReferenced)[number]
+      const referencedSet = new Set(
+        stillReferenced
+          .map((t: StillReferencedRow) => t.task_note_id)
+          .filter((id: string | null): id is string => !!id)
+      )
+      const deletable = noteIds.filter((id: string) => !referencedSet.has(id))
+      if (deletable.length > 0) {
+        await prisma.task_notes.deleteMany({
+          where: { task_note_id: { in: deletable } },
+        })
+      }
+    }
+
+    revalidatePath('/')
+    revalidatePath('/projects')
+    revalidatePath('/locations')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting project:', error)
     throw error
   }
 }
