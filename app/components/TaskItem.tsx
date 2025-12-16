@@ -36,10 +36,9 @@ interface TaskItemProps {
   onLocationClick?: (locationId: string) => void
   activeProjectFilter?: string | null
   activeLocationFilter?: string | null
-  showProject?: boolean
 }
 
-export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectFilter, activeLocationFilter, showProject = true }: TaskItemProps) {
+export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectFilter, activeLocationFilter }: TaskItemProps) {
   const [isPending, startTransition] = useTransition()
   const [isCompleting, setIsCompleting] = useState(false)
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false)
@@ -237,17 +236,15 @@ export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectF
             )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
-            {showProject && (
-              <Capsule
-                variant="project"
-                as="button"
-                onClick={() => onProjectClick?.(task.projects.project_id)}
-                active={activeProjectFilter === task.projects.project_id}
-                title="Filter by project"
-              >
-                📁 {task.projects.project_name}
-              </Capsule>
-            )}
+            <Capsule
+              variant="project"
+              as="button"
+              onClick={() => onProjectClick?.(task.projects.project_id)}
+              active={activeProjectFilter === task.projects.project_id}
+              title="Filter by project"
+            >
+              📁 {task.projects.project_name}
+            </Capsule>
             {task.locations && task.location_id && (
               <Capsule
                 variant="location"
@@ -259,11 +256,22 @@ export function TaskItem({ task, onProjectClick, onLocationClick, activeProjectF
                 📍 {task.locations.location_name.split(',')[0].trim()}
               </Capsule>
             )}
-            {task.priorities && (
-              <Capsule variant="priority" as="span">
-                {task.priorities.priority_level}
-              </Capsule>
-            )}
+            {task.priorities && (() => {
+              const priorityLevel = task.priorities.priority_level
+              let priorityClassName = ''
+              if (priorityLevel === 'HIGH') {
+                priorityClassName = 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+              } else if (priorityLevel === 'MEDIUM') {
+                priorityClassName = 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+              } else if (priorityLevel === 'LOW') {
+                priorityClassName = 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300'
+              }
+              return (
+                <Capsule variant="priority" as="span" className={priorityClassName}>
+                  {priorityLevel}
+                </Capsule>
+              )
+            })()}
           </div>
           {error && (
             <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>

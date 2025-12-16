@@ -124,6 +124,98 @@ export async function getProjectsWithTasks() {
   }
 }
 
+export async function getLocationsWithTasks() {
+  try {
+    const locations = await prisma.locations.findMany({
+      include: {
+        tasks: {
+          include: {
+            priorities: true,
+            projects: {
+              select: {
+                project_id: true,
+                project_name: true,
+              },
+            },
+            task_notes: {
+              select: {
+                task_note_id: true,
+                task_note_content: true,
+              },
+            },
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        },
+      },
+      orderBy: {
+        location_name: 'asc',
+      },
+    })
+    
+    // Get tasks without locations
+    const tasksWithoutLocations = await prisma.tasks.findMany({
+      where: {
+        location_id: null,
+      },
+      include: {
+        priorities: true,
+        projects: {
+          select: {
+            project_id: true,
+            project_name: true,
+          },
+        },
+        task_notes: {
+          select: {
+            task_note_id: true,
+            task_note_content: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    })
+    
+    // Convert Decimal values to numbers for client components
+    const locationsWithTasks = locations.map(location => ({
+      ...location,
+      latitude: location.latitude ? Number(location.latitude) : null,
+      longitude: location.longitude ? Number(location.longitude) : null,
+      tasks: location.tasks.map(task => ({
+        ...task,
+        locations: {
+          location_id: location.location_id,
+          location_name: location.location_name,
+          latitude: location.latitude ? Number(location.latitude) : null,
+          longitude: location.longitude ? Number(location.longitude) : null,
+        },
+      })),
+    }))
+    
+    // Add "Anywhere" group for tasks without locations
+    const anywhereGroup = {
+      location_id: 'anywhere',
+      location_name: 'Anywhere',
+      latitude: null,
+      longitude: null,
+      radius: 0,
+      tasks: tasksWithoutLocations.map(task => ({
+        ...task,
+        locations: null,
+      })),
+    }
+    
+    // Combine locations with "Anywhere" group, placing "Anywhere" first
+    return [anywhereGroup, ...locationsWithTasks]
+  } catch (error) {
+    console.error('Error fetching locations with tasks:', error)
+    throw error
+  }
+}
+
 export async function getLocations() {
   try {
     const locations = await prisma.locations.findMany({
@@ -202,7 +294,7 @@ export async function updateUserAutoLocationFilter(enabled: boolean) {
   }
 }
 
-export async function createProject(projectName: string) {
+export async function createProject(projectName: string, projectDescription?: string | null) {
   try {
     // Ensure a default user exists
     let user = await prisma.users.findFirst()
@@ -232,6 +324,7 @@ export async function createProject(projectName: string) {
         project_id: randomUUID(),
         user_id: user.user_id,
         project_name: projectName.trim(),
+        project_description: projectDescription?.trim() || null,
       },
       select: {
         project_id: true,
@@ -240,6 +333,7 @@ export async function createProject(projectName: string) {
     })
 
     revalidatePath('/')
+    revalidatePath('/projects')
     return project
   } catch (error) {
     console.error('Error creating project:', error)
@@ -290,7 +384,8 @@ export async function createTask(
   taskDescription: string, 
   projectId?: string,
   location?: LocationData,
-  dueDate?: Date | string
+  dueDate?: Date | string,
+  priorityLevel?: string
 ) {
   try {
     let project
@@ -369,6 +464,7 @@ export async function createTask(
         project_id: project.project_id,
         location_id: locationId,
         due_date: dueDate ? new Date(dueDate) : null,
+        priority_level: priorityLevel && ['LOW', 'MEDIUM', 'HIGH'].includes(priorityLevel) ? priorityLevel : null,
       },
       include: {
         projects: {

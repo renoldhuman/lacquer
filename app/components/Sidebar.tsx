@@ -64,6 +64,18 @@ export function Sidebar() {
         </Link>
 
         <Link
+          href="/locations"
+          className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-lg transition-colors ${
+            pathname === '/locations'
+              ? 'bg-zinc-100 dark:bg-zinc-800 text-black dark:text-zinc-50'
+              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <span className="text-xl flex-shrink-0">📍</span>
+          {!isCollapsed && <span className="font-medium">Locations</span>}
+        </Link>
+
+        <Link
           href="/settings"
           className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-lg transition-colors ${
             pathname === '/settings'

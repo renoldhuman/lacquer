@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { TaskItem } from './TaskItem'
 
-interface Project {
-  project_id: string
-  project_name: string
-  project_description: string | null
+interface Location {
+  location_id: string
+  location_name: string
+  latitude: number | null
+  longitude: number | null
+  radius: number
   tasks: Array<{
     task_id: string
     task_description: string
@@ -35,70 +37,70 @@ interface Project {
   }>
 }
 
-interface ProjectsListProps {
-  projects: Project[]
+interface LocationsListProps {
+  locations: Location[]
 }
 
-export function ProjectsList({ projects }: ProjectsListProps) {
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
+export function LocationsList({ locations }: LocationsListProps) {
+  const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set())
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set())
 
-  const toggleProject = (projectId: string) => {
-    const newExpanded = new Set(expandedProjects)
-    if (newExpanded.has(projectId)) {
-      newExpanded.delete(projectId)
+  const toggleLocation = (locationId: string) => {
+    const newExpanded = new Set(expandedLocations)
+    if (newExpanded.has(locationId)) {
+      newExpanded.delete(locationId)
     } else {
-      newExpanded.add(projectId)
+      newExpanded.add(locationId)
     }
-    setExpandedProjects(newExpanded)
+    setExpandedLocations(newExpanded)
   }
 
-  const toggleCompletedVisibility = (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent expanding/collapsing the project
+  const toggleCompletedVisibility = (locationId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent expanding/collapsing the location
     const newShowCompleted = new Set(showCompleted)
-    if (newShowCompleted.has(projectId)) {
-      newShowCompleted.delete(projectId)
+    if (newShowCompleted.has(locationId)) {
+      newShowCompleted.delete(locationId)
     } else {
-      newShowCompleted.add(projectId)
+      newShowCompleted.add(locationId)
     }
     setShowCompleted(newShowCompleted)
   }
 
   const handleProjectClick = (projectId: string) => {
     // This is just for consistency with TaskItem, but we don't need to filter here
-    // since we're already showing tasks grouped by project
+    // since we're already showing tasks grouped by location
   }
 
   const handleLocationClick = (locationId: string) => {
     // This is just for consistency with TaskItem, but we don't need to filter here
-    // since we're already showing tasks grouped by project
+    // since we're already showing tasks grouped by location
   }
 
   return (
     <div className="space-y-4">
-      {projects.length === 0 ? (
+      {locations.length === 0 ? (
         <div className="text-center py-12 text-zinc-600 dark:text-zinc-400">
-          <p className="text-lg">No projects yet. Create your first project!</p>
+          <p className="text-lg">No locations yet. Create your first task with a location!</p>
         </div>
       ) : (
-        projects.map((project) => {
-          const isExpanded = expandedProjects.has(project.project_id)
-          const taskCount = project.tasks.length
-          const completedCount = project.tasks.filter(t => t.is_completed).length
+        locations.map((location) => {
+          const isExpanded = expandedLocations.has(location.location_id)
+          const taskCount = location.tasks.length
+          const completedCount = location.tasks.filter(t => t.is_completed).length
           const uncompletedCount = taskCount - completedCount
-          const showCompletedTasks = showCompleted.has(project.project_id)
+          const showCompletedTasks = showCompleted.has(location.location_id)
           const visibleTasks = showCompletedTasks 
-            ? project.tasks 
-            : project.tasks.filter(t => !t.is_completed)
+            ? location.tasks 
+            : location.tasks.filter(t => !t.is_completed)
 
           return (
             <div
-              key={project.project_id}
+              key={location.location_id}
               className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden"
             >
-              {/* Project Header - Clickable to expand/collapse */}
+              {/* Location Header - Clickable to expand/collapse */}
               <button
-                onClick={() => toggleProject(project.project_id)}
+                onClick={() => toggleLocation(location.location_id)}
                 className="w-full px-6 py-4 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left"
               >
                 <div className="flex items-center gap-3">
@@ -119,11 +121,16 @@ export function ProjectsList({ projects }: ProjectsListProps) {
                   </svg>
                   <div>
                     <h2 className="text-xl font-semibold text-black dark:text-zinc-50">
-                      {project.project_name}
+                      {location.location_name}
                     </h2>
-                    {project.project_description && (
+                    {location.location_id !== 'anywhere' && location.latitude !== null && location.longitude !== null && (
                       <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-                        {project.project_description}
+                        {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                      </p>
+                    )}
+                    {location.location_id === 'anywhere' && (
+                      <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+                        Tasks without a specific location
                       </p>
                     )}
                   </div>
@@ -139,7 +146,7 @@ export function ProjectsList({ projects }: ProjectsListProps) {
                       <span className={`flex items-center gap-1.5 ${uncompletedCount > 0 ? 'ml-2' : ''}`}>
                         <span>{completedCount} completed</span>
                         <button
-                          onClick={(e) => toggleCompletedVisibility(project.project_id, e)}
+                          onClick={(e) => toggleCompletedVisibility(location.location_id, e)}
                           className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
                           title={showCompletedTasks ? 'Hide completed tasks' : 'Show completed tasks'}
                         >
@@ -166,7 +173,7 @@ export function ProjectsList({ projects }: ProjectsListProps) {
                 <div className="border-t border-zinc-200 dark:border-zinc-800 px-6 py-4">
                   {visibleTasks.length === 0 ? (
                     <div className="text-center py-8 text-zinc-600 dark:text-zinc-400">
-                      <p>{showCompletedTasks ? 'No tasks in this project yet.' : 'No active tasks in this project.'}</p>
+                      <p>{showCompletedTasks ? 'No tasks at this location yet.' : 'No active tasks at this location.'}</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
