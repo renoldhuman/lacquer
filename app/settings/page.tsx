@@ -1,6 +1,9 @@
 import { getUserAutoLocationFilter } from '@/app/actions/tasks'
 import { SettingsForm } from '@/app/components/SettingsForm'
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = 'force-dynamic'
+
 export default async function SettingsPage() {
   const autoLocationFilter = await getUserAutoLocationFilter()
 

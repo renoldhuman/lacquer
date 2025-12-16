@@ -1,6 +1,9 @@
 import { getLocationsWithTasks } from '@/app/actions/tasks'
 import { LocationsList } from '@/app/components/LocationsList'
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = 'force-dynamic'
+
 export default async function LocationsPage() {
   const locations = await getLocationsWithTasks()
 

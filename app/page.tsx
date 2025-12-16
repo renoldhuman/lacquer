@@ -3,6 +3,9 @@ import { TaskMapForm } from '@/app/components/TaskMapForm'
 import { TaskList } from '@/app/components/TaskList'
 import { GoogleMapsProvider } from '@/app/providers/GoogleMapsProvider'
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = 'force-dynamic'
+
 export default async function Home() {
   const tasks = await getTasks()
   const projects = await getProjects()

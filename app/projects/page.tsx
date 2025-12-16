@@ -2,6 +2,9 @@ import { getProjectsWithTasks } from '@/app/actions/tasks'
 import { ProjectsList } from '@/app/components/ProjectsList'
 import { ProjectsHeader } from '@/app/components/ProjectsHeader'
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = 'force-dynamic'
+
 export default async function ProjectsPage() {
   const projects = await getProjectsWithTasks()
 
