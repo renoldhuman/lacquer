@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node -e \"const fs=require('fs');const src=fs.existsSync('env.local.supabase')?'env.local.supabase':(fs.existsSync('.env.local.supabase')?'.env.local.supabase':null);if(!src){console.error('Missing env file: create env.local.supabase (or .env.local.supabase)');process.exit(1)}fs.copyFileSync(src,'.env.local');fs.copyFileSync(src,'.env')\" && prisma db push && next dev",
+    "dev:remote": "node -e \"const fs=require('fs');const src=fs.existsSync('env.remote.supabase')?'env.remote.supabase':(fs.existsSync('.env.remote.supabase')?'.env.remote.supabase':null);if(!src){console.error('Missing env file: create env.remote.supabase (or .env.remote.supabase)');process.exit(1)}fs.copyFileSync(src,'.env.local');fs.copyFileSync(src,'.env')\" && next dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

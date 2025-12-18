@@ -105,7 +105,18 @@ export async function getAuthenticatedUserId(): Promise<string | null> {
     }
 
     return user.user_id
-  } catch (error) {
+  } catch (error: any) {
+    // If the database isn't initialized (common in local Supabase before `prisma db push`),
+    // do NOT convert this into an auth failure. Surface a clear actionable error instead.
+    const message: string = String(error?.message || '')
+    const code: string | undefined = error?.code
+    if (code === 'P2021' || message.includes('does not exist in the current database')) {
+      throw new Error(
+        'Database not initialized: required tables are missing (e.g. public.users). ' +
+          'If running locally with Supabase, run `supabase start` then `npm run db:push` to create the schema.'
+      )
+    }
+
     console.error('Error getting authenticated user:', error)
     return null
   }

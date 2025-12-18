@@ -10,8 +10,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
-  // TODO: Re-enable authentication checks when ready
-  // Currently bypassed to use single account logic
   const AUTH_ENABLED = true
 
   useEffect(() => {
